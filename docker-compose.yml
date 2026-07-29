@@ -1,0 +1,42 @@
+# Local development infrastructure.
+# Postgres = durable database. Redis = realtime state + background job queue.
+# FreeSWITCH runs on the host (or a separate VM); this file only manages the
+# application-tier dependencies so developers can start fast.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nativetalk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nativetalk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nativetalk_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-nativetalk}
+    ports:
+      - "5432:5432"
+    volumes:
+      - nativetalk_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nativetalk} -d ${POSTGRES_DB:-nativetalk}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: nativetalk-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - nativetalk_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nativetalk_pgdata:
+  nativetalk_redisdata:

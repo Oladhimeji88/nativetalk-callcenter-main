@@ -1,0 +1,25 @@
+[Unit]
+Description=NativeTalk API — Cloud PBX + Contact Center Platform
+After=network-online.target postgresql.service redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nativetalk
+Group=nativetalk
+WorkingDirectory=/opt/nativetalk/apps/api
+EnvironmentFile=/opt/nativetalk/apps/api/.env
+ExecStart=/usr/bin/node /opt/nativetalk/apps/api/dist/main.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nativetalk-api
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/freeswitch/recordings /etc/freeswitch/conf
+
+[Install]
+WantedBy=multi-user.target
