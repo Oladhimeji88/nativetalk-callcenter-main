@@ -2,3 +2,52 @@
    - Environments: .env.local
 
    Creating an optimized production build ...
+ ✓ Compiled successfully in 9.7s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/31) ...
+   Generating static pages (7/31) 
+   Generating static pages (15/31) 
+   Generating static pages (23/31) 
+ ✓ Generating static pages (31/31)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                      377 B         131 kB
+├ ○ /_not-found                            995 B         103 kB
+├ ○ /agent                               9.68 kB         202 kB
+├ ○ /agents                              4.56 kB         135 kB
+├ ○ /billing                             1.63 kB         132 kB
+├ ○ /call-logs                           3.47 kB         134 kB
+├ ○ /campaigns                           13.3 kB         144 kB
+├ ○ /contacts                             116 kB         309 kB
+├ ○ /dashboard                           10.3 kB         144 kB
+├ ○ /dispositions                        3.66 kB         134 kB
+├ ○ /forgot-password                     4.02 kB         115 kB
+├ ○ /live                                14.7 kB         145 kB
+├ ○ /login                               2.39 kB         142 kB
+├ ○ /platform                            3.86 kB         141 kB
+├ ○ /platform/announcements              5.12 kB         136 kB
+├ ○ /platform/audit                      4.22 kB         135 kB
+├ ○ /platform/billing                    2.25 kB         136 kB
+├ ○ /platform/infrastructure             5.06 kB         136 kB
+├ ○ /platform/plans                      6.13 kB         137 kB
+├ ○ /platform/settings                   2.92 kB         137 kB
+├ ○ /platform/staff                      5.86 kB         137 kB
+├ ○ /platform/tenants                    7.99 kB         139 kB
+├ ○ /profile                             2.64 kB         133 kB
+├ ○ /queues                              5.01 kB         136 kB
+├ ○ /recordings                          3.51 kB         134 kB
+├ ○ /register                            1.32 kB         141 kB
+├ ○ /roles                               3.02 kB         134 kB
+├ ○ /trunks                              3.91 kB         135 kB
+└ ○ /users                               3.46 kB         134 kB
++ First Load JS shared by all             102 kB
+  ├ chunks/8745-076abecbc967b7c2.js      46.2 kB
+  ├ chunks/d5e7b259-a07c86861f3be0ea.js  54.2 kB
+  └ other shared chunks (total)             2 kB
+
+
+○  (Static)  prerendered as static content
+
