@@ -124,7 +124,7 @@ export default function ForgotPasswordPage() {
     <div className="auth-page">
       <div className="auth-stack">
         <div className="auth-logo">
-          <Image src="/nativetalk-logo.svg" alt="NativeTalk" width={140} height={41} priority />
+          <Image src="/nativetalk-logo.svg" alt="NativeTalk" width={196} height={58} priority />
         </div>
 
         {step !== 'done' && (

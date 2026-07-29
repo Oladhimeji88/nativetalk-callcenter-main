@@ -1590,7 +1590,12 @@ table tbody tr:last-child td {
 .auth-logo {
   display: flex;
   justify-content: center;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
+}
+
+.auth-logo img {
+  width: clamp(160px, 44vw, 196px);
+  height: auto;
 }
 
 .auth-card {
