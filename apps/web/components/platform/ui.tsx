@@ -109,8 +109,10 @@ export function Empty({ title, sub }: { title: string; sub?: string }) {
 export function Th({ children, right }: { children?: React.ReactNode; right?: boolean }) {
   return <th className={right ? 'is-right' : ''}>{children}</th>;
 }
-export function Td({ children, right, colSpan }: { children?: React.ReactNode; right?: boolean; colSpan?: number }) {
-  return <td colSpan={colSpan} className={right ? 'is-right' : ''}>{children}</td>;
+export function Td({ children, right, colSpan, className }: {
+  children?: React.ReactNode; right?: boolean; colSpan?: number; className?: string;
+}) {
+  return <td colSpan={colSpan} className={[right ? 'is-right' : '', className].filter(Boolean).join(' ')}>{children}</td>;
 }
 
 export function Table({ head, children }: { head: React.ReactNode; children: React.ReactNode }) {

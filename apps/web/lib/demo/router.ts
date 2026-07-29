@@ -18,7 +18,14 @@ export class HttpError extends Error {
 
 // ---------------------------------------------------------------- helpers
 
-const list = (name: string): any[] => db()[name] as any[];
+// Always hands back a real array. If a table is somehow absent (an older saved
+// database, a hand-edited store) it is created rather than returning undefined,
+// so a missing collection can never crash a page mid-render.
+const list = (name: string): any[] => {
+  const store = db();
+  if (!Array.isArray(store[name])) store[name] = [];
+  return store[name] as any[];
+};
 const byId = (name: string, id: string) => list(name).find((x) => x.id === id);
 const remove = (name: string, id: string) => {
   const arr = list(name);

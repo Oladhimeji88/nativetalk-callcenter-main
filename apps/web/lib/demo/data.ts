@@ -479,13 +479,32 @@ let cache: Db | null = null;
 
 export function db(): Db {
   if (cache) return cache;
+
+  const fresh = seed();
+
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(DB_KEY);
-      if (raw) { cache = JSON.parse(raw); return cache!; }
-    } catch { /* corrupt or unavailable — re-seed below */ }
+      if (raw) {
+        const saved = JSON.parse(raw) ?? {};
+        // Layer what this browser has saved over a fresh seed. Anything added to
+        // the schema since it last seeded (a new table, a new settings object)
+        // is filled in from `fresh`, so an older stored copy can never leave the
+        // app reading an undefined collection.
+        cache = { ...fresh, ...saved };
+        for (const key of Object.keys(fresh)) {
+          const mine = (cache as any)[key];
+          const seeded = (fresh as any)[key];
+          const missing = mine == null || (Array.isArray(seeded) && !Array.isArray(mine));
+          if (missing) (cache as any)[key] = seeded;
+        }
+        save();
+        return cache!;
+      }
+    } catch { /* corrupt or unavailable — fall through to the fresh seed */ }
   }
-  cache = seed();
+
+  cache = fresh;
   save();
   return cache!;
 }

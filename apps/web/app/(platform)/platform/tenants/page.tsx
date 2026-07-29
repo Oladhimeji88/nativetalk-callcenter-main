@@ -161,7 +161,7 @@ export default function TenantsPage() {
           onActivate={() => activate(detail)}
           onInvoice={() => invoice(detail)}
           onDelete={() => remove(detail)}
-          onPlan={(planId) => changePlan(detail, planId)}
+          onPlan={(planId: string) => changePlan(detail, planId)}
           onOpenWorkspace={() => openWorkspace(detail)}
         />
       )}

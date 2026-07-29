@@ -1,4 +1,5 @@
 import './globals.css';
+import './console.css';
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Toaster } from 'sonner';
