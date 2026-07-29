@@ -3,13 +3,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Building2, UserCog, ShieldCheck, Cable, X } from 'lucide-react';
+import { UserCog, ShieldCheck, Cable, X } from 'lucide-react';
 import {
   DashboardIcon, AgentWorkspaceIcon, QueuesIcon,
   AgentsIcon, RecordingsIcon, CallLogsIcon, CampaignsIcon, ContactsIcon,
   DispositionIcon,
 } from './icons';
-import { isSuperAdmin, hasPermission, refreshProfile } from '@/lib/api';
+import { hasPermission, refreshProfile } from '@/lib/api';
 
 type Item = { href: string; label: string; Icon: React.ComponentType<{ size?: number }>; perm?: string };
 type Section = { label: string; items: Item[] };
@@ -20,7 +20,8 @@ const SECTIONS: Section[] = [
   {
     label: 'Main',
     items: [
-      { href: '/dashboard',  label: 'Dashboard',    Icon: DashboardIcon, perm: 'analytics' },
+      // Everyone gets a dashboard — the page picks the right one for the role.
+      { href: '/dashboard',  label: 'Dashboard',    Icon: DashboardIcon },
       { href: '/agent',      label: 'Call Console', Icon: AgentWorkspaceIcon, perm: 'softphone' },
     ],
   },
@@ -79,10 +80,8 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
 
     const admin = visible(ADMIN_GROUP);
     if (admin.length) filtered.push({ label: 'Administration', items: admin });
-    if (isSuperAdmin()) {
-      filtered.push({ label: 'Platform Management', items: [{ href: '/platform', label: 'Tenants & Nodes', Icon: ({ size }) => <Building2 size={size} /> }] });
-    }
-
+    // Platform staff work in the Platform Console, which has its own shell —
+    // this sidebar only ever shows one company's workspace.
     setSections(filtered);
   };
 

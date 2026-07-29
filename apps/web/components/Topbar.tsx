@@ -59,8 +59,9 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
   }, [menuOpen]);
 
   const name = user?.name || user?.email || '';
-  // Show the account's actual role (permission group) name, e.g. "Supervisor" / "test".
-  const roleLabel = user?.superAdmin ? 'Platform Admin' : (user?.roleName || 'Member');
+  // The account's role inside this workspace. Platform tiers are never shown
+  // here — staff see their tier in the Platform Console instead.
+  const roleLabel = user?.roleName || 'Member';
 
   // Live agent call-status badge (from the global softphone state).
   const status =

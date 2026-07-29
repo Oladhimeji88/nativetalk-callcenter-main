@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { getUser } from '@/lib/api';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import ImpersonationBar from './ImpersonationBar';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className={`shell ${collapsed ? 'shell-collapsed' : ''}`}>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="shell-main">
+        <ImpersonationBar />
         <Topbar onToggle={toggle} />
         <main className="shell-content">{children}</main>
       </div>
