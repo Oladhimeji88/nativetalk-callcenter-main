@@ -1,0 +1,10 @@
+node_modules/
+*.log
+data/
+dist/
+build/
+.next/
+coverage/
+*.tmp.html
+*.tsbuildinfo
+config.bat

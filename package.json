@@ -1,0 +1,29 @@
+{
+  "name": "nativetalk-callcenter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NativeTalk — Cloud PBX + Contact Center + Omnichannel Communications Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "api:dev": "npm --workspace @nativetalk/api run start:dev",
+    "api:build": "npm --workspace @nativetalk/api run build",
+    "web:dev": "npm --workspace @nativetalk/web run dev",
+    "web:build": "npm --workspace @nativetalk/web run build",
+    "dev": "concurrently \"npm run api:dev\" \"npm run web:dev\"",
+    "db:migrate": "npm --workspace @nativetalk/api run prisma:migrate",
+    "db:seed": "npm --workspace @nativetalk/api run db:seed",
+    "docs:pdf": "node deploy/md-to-pdf.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "marked": "^16.4.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

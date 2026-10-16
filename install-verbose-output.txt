@@ -1,0 +1,14 @@
+npm verbose cli C:\Program Files\nodejs\node.exe C:\Users\USER\AppData\Roaming\npm\node_modules\npm\bin\npm-cli.js
+npm info using npm@11.7.0
+npm info using node@v24.16.0
+npm verbose title npm install
+npm verbose argv "install" "--loglevel" "verbose"
+npm verbose logfile logs-max:10 dir:C:\Users\USER\AppData\Local\npm-cache\_logs\2026-07-28T16_26_41_961Z-
+npm verbose logfile C:\Users\USER\AppData\Local\npm-cache\_logs\2026-07-28T16_26_41_961Z-debug-0.log
+npm verbose cwd C:\Users\USER\Downloads\nativetalk-callcenter-main\nativetalk-callcenter-main
+npm verbose os Windows_NT 10.0.26300
+npm verbose node v24.16.0
+npm verbose npm  v11.7.0
+npm verbose exit 1
+npm verbose code 1
+npm error A complete log of this run can be found in: C:\Users\USER\AppData\Local\npm-cache\_logs\2026-07-28T16_26_41_961Z-debug-0.log

@@ -1,0 +1,65 @@
+===============================================================================
+UNCOMMITTED UPDATES - MANAGEMENT SUMMARY
+Feature: Automatic phone-line (SIP trunk) setup for new customers
+Date: 2026-06-30   |   Branch: feat/phase6-hardening   |   Status: NOT yet committed
+===============================================================================
+
+HEADLINE
+-------------------------------------------------------------------------------
+A LIVE OUTBOUND PHONE CALL COMPLETED end-to-end through the new system, and the
+working configuration is now built into the platform's sign-up flow. New
+customers can be auto-provisioned with a working phone line.
+
+WHAT THIS DOES (in plain terms)
+-------------------------------------------------------------------------------
+When a new company signs up, the platform automatically:
+  - creates that company's phone-line account with our carrier (VoipSwitch),
+  - gives it a phone number (caller ID) from our number pool,
+  - configures the correct calling/routing settings,
+  - adds starter calling credit (optional),
+  - stores the credentials in our database,
+  - and wires the phone server (FreeSWITCH) so the line can place calls.
+
+VERIFIED WORKING (live, against the real carrier)
+-------------------------------------------------------------------------------
+  - Account creation, phone-line registration ("connecting to the carrier"),
+    funding, suspend/reactivate - all working.
+  - A real outbound call was placed and RANG the destination phone. Confirmed.
+
+THE TWO PROBLEMS WE SOLVED ALONG THE WAY
+-------------------------------------------------------------------------------
+  1. The phone server was set to "local-only" (loopback). Binding it to the real
+     network address fixed the line connecting to the carrier.
+  2. Calls were being rejected ("payment required") because the test account was
+     created under the wrong carrier reseller/price-plan. Creating it under
+     NativeTalk's own master account, on a plan that has live call routes, plus
+     the carrier's routing code (tech-prefix), made calls go through.
+
+WHAT REMAINS
+-------------------------------------------------------------------------------
+  1. INBOUND CALLS (receiving) - one carrier-side question still open: how a
+     phone number is bound to a specific customer so incoming calls reach them.
+     Outbound (making calls) does not depend on this. (Question is drafted for
+     the operator in deploy/VOIPSWITCH-OPERATOR-QUESTIONS.md.)
+  2. PRODUCTION SERVER CHECK - confirm the live server's phone software is bound
+     to its real/public address (same fix as #1 above; a normal server install
+     already is).
+  3. BUSINESS DECISIONS - which price-plan (tariff) is the default for tenants,
+     and the starter-credit amount/top-up policy.
+  4. Commit the code (still uncommitted on this branch).
+
+FILES CHANGED (technical reference)
+-------------------------------------------------------------------------------
+  New:  apps/api/src/voipswitch/  (carrier integration - now the full working recipe)
+        apps/api/prisma/migrations/20260625120000_*  (DB fields)
+        deploy/VOIPSWITCH-TRUNK-PROVISIONING.md, VOIPSWITCH-OPERATOR-QUESTIONS.md
+  Modified: billing.service.ts (signup hook + per-tenant gateway naming),
+        voipswitch.service.ts (retail + reseller -1 + tech-prefix + DID + credit),
+        freeswitch/fs-provisioning.service.ts (outbound dial-plan route),
+        billing.module.ts, app.module.ts, pbx/pbx.module.ts, schema.prisma,
+        .env.example
+
+NOTE: Carrier admin credentials were used for testing (stored only in a local,
+non-committed config file) and that password should be rotated. Test accounts on
+the carrier: 205, 1975, 1976, 1978.
+===============================================================================

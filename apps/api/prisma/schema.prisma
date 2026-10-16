@@ -1,0 +1,566 @@
+// NativeTalk Call Center data model.
+// Multi-tenant: every business table carries tenantId (cascade delete on tenant removal).
+// Single account model (Account) for all user types — role + Role.permissions
+// determine what each person can see and do. No separate agent/user account model.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  status    String   @default("active") // trial | active | suspended
+  planId    String?
+  plan      Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  limits    Json?    // overrides plan limits: { maxExtensions, maxConcurrentCalls, maxCampaigns }
+  branding  Json?    // { name, logoUrl, color }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  roles        Role[]
+  accounts     Account[]
+  dataRecords  DataRecord[]
+  auditLogs    AuditLog[]
+  extensions    Extension[]
+  trunks        Trunk[]
+  ringGroups    RingGroup[]
+  inboundRoutes InboundRoute[]
+  ivrs          Ivr[]
+  queues        Queue[]
+  timeConditions TimeCondition[]
+  dispositions  Disposition[]
+  dncEntries    Dnc[]
+  leadGroups    LeadGroup[]
+  leads         Lead[]
+  campaigns     OutboundCampaign[]
+  callAttempts  CallAttempt[]
+  callbacks     Callback[]
+  contacts      Contact[]
+  contactGroups ContactGroup[]
+  customFields  CustomField[]
+  callLogs      CallLog[]
+}
+
+// A named set of permissions. System roles (isSystem=true) are seeded on tenant
+// creation and cannot be edited or deleted — clone them to create custom roles.
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  isSystem    Boolean  @default(false)
+  // { "<section>": { enabled: bool, items?: { "<key>": bool } } }
+  permissions Json     @default("{}")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  accounts Account[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// Unified login account for everyone — agent, supervisor, admin all use this.
+// `role` maps to one of the three system roles (admin | supervisor | agent).
+// What each account can see is determined by their Role.permissions.
+// `superAdmin` is orthogonal: cross-tenant platform operator (Tech4mation only).
+model Account {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email          String
+  passwordHash   String
+  firstName      String?
+  lastName       String?
+  username       String?
+  agentExtension String?  // SIP extension the account uses to take calls
+  roleId         String?  // the account's role = a permission group (Role)
+  accountRole    Role?    @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  managerId      String?  // the supervisor/admin this user reports to (org structure)
+  manager        Account? @relation("AccountManager", fields: [managerId], references: [id], onDelete: SetNull)
+  reports        Account[] @relation("AccountManager")
+  language       String?  @default("Default")
+  allowMonitoring Boolean @default(true)
+  superAdmin     Boolean  @default(false) // platform operator — cross-tenant access
+  active         Boolean  @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+// Faithful holding table for collections whose relational models arrive in a
+// later phase (campaigns, dispositions, dnc, webforms, lead-groups). Keeps the
+// data first-class and tenant-scoped without forcing a premature schema.
+model DataRecord {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  collection String
+  data       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId, collection])
+}
+
+// ============================ Cloud PBX (Phase 1) ============================
+
+// A SIP extension / device (registers a softphone). Generated into the
+// FreeSWITCH directory so phones can register and be dialled.
+model Extension {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  extension       String   // the dial number, e.g. "1001"
+  password        String
+  displayName     String?
+  context         String   @default("default")
+  callerIdName    String?
+  callerIdNumber  String?
+  voicemail       Boolean  @default(true)
+  tollAllow       String   @default("domestic,local")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, extension])
+  @@index([tenantId])
+}
+
+// An outbound SIP trunk (Sofia gateway) to a carrier.
+model Trunk {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String   // gateway name (sofia)
+  username    String
+  password    String
+  proxy       String   // carrier host/IP, e.g. sip.provider.com
+  realm       String?
+  fromDomain  String?
+  register    Boolean  @default(true)
+  callerId    String?
+  active      Boolean  @default(true)
+  // Upstream provider this trunk was auto-provisioned with, if any (e.g.
+  // "voipswitch"), and the provider-side client id used to suspend/delete it.
+  provider         String?
+  providerClientId Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// A ring group: dialling its number rings several extensions.
+model RingGroup {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  number      String   // the number that triggers the group
+  strategy    String   @default("simultaneous") // simultaneous | sequential
+  members     Json     @default("[]")           // array of extension numbers
+  timeoutSec  Int      @default(25)
+  failoverDest String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+// Inbound routing: a DID/number arrives → send it somewhere.
+model InboundRoute {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  did             String   // inbound number
+  destinationType String   // extension | ring-group | ivr | queue | voicemail | hangup
+  destination     String?  // target number/name
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, did])
+  @@index([tenantId])
+}
+
+// An IVR menu (press 1 for sales, …).
+model Ivr {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  number      String
+  greeting    String   @default("ivr/ivr-welcome_to_freeswitch.wav")
+  timeoutSec  Int      @default(5)
+  options     Json     @default("{}")  // { "1": { type, destination }, ... }
+  invalidDest String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+// An ACD call queue (agents take queued callers).
+model Queue {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  number      String
+  strategy    String   @default("ring-all")
+  moh         String   @default("$${hold_music}")
+  members     Json     @default("[]") // agent extension numbers
+  maxWaitSec  Int      @default(300)
+  slaTargetPct Int     @default(80) // target % of calls answered within SLA
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+// Business-hours routing.
+model TimeCondition {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  number      String
+  ranges      Json     @default("[]") // [{ wday, timeStart, timeEnd }]
+  matchDest   String?
+  noMatchDest String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+// ======================= Contact Center (Phase 3) ===========================
+
+model Disposition {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  code      String?
+  category  String?  // Success | Failure | Callback | Retry | DNC | Neutral
+  color     String?
+  active    Boolean  @default(true)
+  isSystem  Boolean  @default(false) // standard fallback dispositions (Answered/No Answer/…) — can't be deleted/renamed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model Dnc {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number    String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+model LeadGroup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  leads     Lead[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model Lead {
+  id          String     @id @default(cuid())
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadGroupId String?
+  leadGroup   LeadGroup? @relation(fields: [leadGroupId], references: [id], onDelete: SetNull)
+  campaignId  String?    // set when materialised into a campaign's working list
+  name        String?
+  phone       String
+  extra       Json       @default("{}")
+  status      String     @default("new") // new | dialing | done | dnc  (retryable → back to new)
+  attempts    Int        @default(0)
+  lastDisposition String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([tenantId, leadGroupId])
+  @@index([tenantId, campaignId, status])
+}
+
+// One row per finished dialer run (Progressive / Power / Predictive / VoiceBroadcast).
+// Persisted when a run ends so a campaign's history + lifetime abandon rate survive
+// after the live run object is gone. Preview/Manual are agent-paced (no run) and are
+// reported from CallLog/CallAttempt instead.
+model CampaignRun {
+  id          String   @id @default(cuid())
+  tenantId    String
+  campaignId  String
+  dialMethod  String
+  status      String   // done | stopped | error
+  startedAt   DateTime
+  endedAt     DateTime @default(now())
+  dialed      Int      @default(0) // distinct numbers dialed
+  connected   Int      @default(0) // reached a customer (picked up)
+  bridged     Int      @default(0) // ...of those, reached an agent
+  abandoned   Int      @default(0) // ...answered but left the queue with no agent
+  failed      Int      @default(0)
+
+  @@index([tenantId, campaignId])
+  @@index([tenantId, endedAt])
+}
+
+model OutboundCampaign {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?  // shown in the campaigns list
+  goal         String?  // free-text objective, e.g. "1500 accounts upgraded"
+  directionType String? // Outbound | Inbound | Blended
+  assignedAgentIds String[] @default([]) // Account ids of agents assigned to work this campaign
+  contactGroupId String? // a ContactGroup to source leads from (merged with `numbers`)
+  dispositionIds String[] @default([]) // dispositions offered for this campaign (empty = all)
+  excludeDispositionIds String[] @default([]) // leads whose last disposition is one of these are skipped on a re-run (iCallify "lead status")
+  scheduleStart DateTime? // campaign active window (optional)
+  scheduleEnd   DateTime?
+  callWindowStart String? // daily call hours, "HH:mm" (optional)
+  callWindowEnd   String?
+  timezone      String?
+  dialMethod   String   @default("Progressive") // Manual | Preview | Progressive | Power | Predictive | VoiceBroadcast
+  outgoingRule String?
+  gateway      String?
+  callerId     String?
+  queue        String?  // ACD queue number to bridge answered calls to (agent mode)
+  audioFile    String?  // played when no queue (voice-broadcast mode)
+  leadGroupId  String?
+  numbers      String   @default("") // pasted numbers, merged with lead group
+  maxAttempts  Int      @default(1)
+  concurrency  Int      @default(1)   // hard cap on simultaneous calls
+  overdialRatio Float   @default(1)   // Power: calls per free agent (1 = none). Predictive: starting/initial ratio
+  abandonTargetPct Float @default(3)  // Predictive: target max abandon rate (%) the controller holds to
+  recording    Boolean  @default(false)
+  amd          Boolean  @default(false) // skip answering machines when available
+  successDisposition String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  attempts     CallAttempt[]
+
+  @@index([tenantId])
+}
+
+model CallAttempt {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId  String?
+  campaign    OutboundCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  runId       String?  // CampaignRun.id this attempt belongs to (null on pre-runId rows)
+  leadId      String?
+  number      String
+  direction   String   @default("outbound")
+  status      String   // queued | dialing | answered | failed | skipped | machine | stopped
+  cause       String?
+  disposition String?
+  attempt     Int      @default(1)
+  agent       String?
+  recording   String?
+  durationSec Int      @default(0)
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+
+  @@index([tenantId, campaignId])
+  @@index([runId])
+}
+
+model Callback {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId  String?
+  number      String
+  scheduledAt DateTime
+  agent       String?
+  notes       String?
+  done        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, scheduledAt])
+}
+
+// Contact — the external party (customer) on a call or in a campaign.
+model Contact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String?
+  phone     String?
+  email     String?
+  company   String?
+  notes     String?   // persistent notes about this person (survives every call)
+  customFields Json  @default("{}") // values for tenant-defined CustomFields, keyed by field key
+  groupIds  String[] @default([]) // ContactGroup ids this contact belongs to (many-to-many)
+  callLogs  CallLog[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, phone])
+}
+
+// Tenant-defined extra field on contacts/leads (e.g. "Industry", "Policy no.").
+// Definitions live here; values live in Contact.customFields / Lead.extra as JSON
+// keyed by `key`.
+model CustomField {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key       String   // stable machine key used in the JSON (e.g. "industry")
+  label     String   // display label
+  type      String   @default("text") // text | number | date | select
+  options   String[] @default([]) // choices when type = select
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+}
+
+// A named list/segment of contacts (e.g. "Lagos SMEs"). A campaign can target a
+// group; membership is via Contact.groupIds (a contact can be in several groups).
+model ContactGroup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// A single call, logged when it ends — powers the Call Logs page, and the
+// console's Recent Interactions / Last contact panels (looked up by peerNumber).
+// Written for softphone, inbound and (later) campaign calls alike.
+model CallLog {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  direction   String    @default("outbound") // outbound | inbound | internal
+  agentExt    String?   // extension of the logged-in user who handled the call
+  peerNumber  String    // the other party (customer) number/extension
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaignId  String?   // set for campaign (preview/progressive) calls
+  leadId      String?   // the lead this call was for, if a campaign call
+  disposition String?
+  notes       String?   // agent's wrap-up notes for THIS call
+  disconnectedBy String? // who ended the call: agent | customer (null if it never connected)
+  status      String    @default("completed") // completed | missed | no-answer | failed | canceled
+  durationSec Int       @default(0)
+  recording   String?
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, startedAt])
+  @@index([tenantId, peerNumber])
+  @@index([tenantId, contactId])
+}
+
+// ===================== Billing / SaaS (Phase 5) =============================
+
+model Plan {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  priceMonthly Int      @default(0) // minor units (kobo/cents)
+  currency     String   @default("NGN")
+  limits       Json     @default("{}") // { maxExtensions, maxConcurrentCalls, maxCampaigns }
+  features     Json     @default("[]")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenants       Tenant[]
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId      String
+  plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  status      String   @default("active") // trialing | active | past_due | canceled
+  periodStart DateTime @default(now())
+  periodEnd   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  periodStart DateTime
+  periodEnd   DateTime
+  amount      Int      @default(0)
+  currency    String   @default("NGN")
+  status      String   @default("open") // open | paid | void
+  lineItems   Json     @default("[]")
+  provider    String?  // paystack | flutterwave
+  providerRef String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actorEmail String?
+  action    String
+  entity    String?
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}

@@ -1,0 +1,76 @@
+# Full production-style stack: database, cache, API, and web — each its own
+# container. FreeSWITCH stays on its OWN host/VM (media servers don't belong
+# in this app stack); point FS_* env vars at it.
+#
+#   docker compose -f docker-compose.full.yml up -d --build
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nativetalk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nativetalk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong DB password}
+      POSTGRES_DB: ${POSTGRES_DB:-nativetalk}
+    volumes:
+      - nativetalk_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nativetalk} -d ${POSTGRES_DB:-nativetalk}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: nativetalk-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - nativetalk_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: nativetalk-api
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nativetalk}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nativetalk}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT secret}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3001}
+      FS_HOST: ${FS_HOST:?set FreeSWITCH host}
+      FS_PORT: ${FS_PORT:-8021}
+      FS_PASSWORD: ${FS_PASSWORD:?set FreeSWITCH ESL password}
+      FS_WS_URL: ${FS_WS_URL:-}
+      FS_CONF_DIR: ${FS_CONF_DIR:-}
+      FS_RECORDINGS_DIR: ${FS_RECORDINGS_DIR:-}
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    container_name: nativetalk-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3001:3001"
+
+volumes:
+  nativetalk_pgdata:
+  nativetalk_redisdata:
