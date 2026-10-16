@@ -7,4 +7,3 @@ build/
 coverage/
 *.tmp.html
 *.tsbuildinfo
-config.bat
